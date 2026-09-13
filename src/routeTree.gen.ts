@@ -10,33 +10,73 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as MenRouteImport } from './routes/men'
+import { Route as ShopRouteImport } from './routes/shop'
+import { Route as ThakurSewaRouteImport } from './routes/thakur-sewa'
+import { Route as WomenRouteImport } from './routes/women'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MenRoute = MenRouteImport.update({
+  id: '/men',
+  path: '/men',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShopRoute = ShopRouteImport.update({
+  id: '/shop',
+  path: '/shop',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ThakurSewaRoute = ThakurSewaRouteImport.update({
+  id: '/thakur-sewa',
+  path: '/thakur-sewa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WomenRoute = WomenRouteImport.update({
+  id: '/women',
+  path: '/women',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/men': typeof MenRoute
+  '/shop': typeof ShopRoute
+  '/thakur-sewa': typeof ThakurSewaRoute
+  '/women': typeof WomenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/men': typeof MenRoute
+  '/shop': typeof ShopRoute
+  '/thakur-sewa': typeof ThakurSewaRoute
+  '/women': typeof WomenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/men': typeof MenRoute
+  '/shop': typeof ShopRoute
+  '/thakur-sewa': typeof ThakurSewaRoute
+  '/women': typeof WomenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/men' | '/shop' | '/thakur-sewa' | '/women'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/men' | '/shop' | '/thakur-sewa' | '/women'
+  id: '__root__' | '/' | '/men' | '/shop' | '/thakur-sewa' | '/women'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MenRoute: typeof MenRoute
+  ShopRoute: typeof ShopRoute
+  ThakurSewaRoute: typeof ThakurSewaRoute
+  WomenRoute: typeof WomenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +88,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/men': {
+      id: '/men'
+      path: '/men'
+      fullPath: '/men'
+      preLoaderRoute: typeof MenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shop': {
+      id: '/shop'
+      path: '/shop'
+      fullPath: '/shop'
+      preLoaderRoute: typeof ShopRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/thakur-sewa': {
+      id: '/thakur-sewa'
+      path: '/thakur-sewa'
+      fullPath: '/thakur-sewa'
+      preLoaderRoute: typeof ThakurSewaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/women': {
+      id: '/women'
+      path: '/women'
+      fullPath: '/women'
+      preLoaderRoute: typeof WomenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MenRoute: MenRoute,
+  ShopRoute: ShopRoute,
+  ThakurSewaRoute: ThakurSewaRoute,
+  WomenRoute: WomenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
