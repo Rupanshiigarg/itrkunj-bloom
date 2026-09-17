@@ -1,2 +1,18 @@
-import { createFileRoute } from "@tanstack/react-router"; import { ShopPage } from "@/components/shop-page";
-export const Route=createFileRoute("/women")({head:()=>({meta:[{title:"Women's Attars — Itrkunj"},{name:"description",content:"Rose, jasmine and saffron attars composed with delicacy."},{property:"og:title",content:"Women's Attars — Itrkunj"},{property:"og:description",content:"Rose, jasmine and saffron attars composed with delicacy."},{property:"og:type",content:"website"},{name:"twitter:card",content:"summary_large_image"}]}),component:()=> <ShopPage category="women"/>});
+import { createFileRoute } from "@tanstack/react-router";
+import { ShopPage } from "@/components/shop-page";
+export const Route = createFileRoute("/women")({
+  head: () => ({
+    meta: [
+      { title: "Women's Attars — Itrkunj" },
+      { name: "description", content: "Rose, jasmine and saffron attars composed with delicacy." },
+      { property: "og:title", content: "Women's Attars — Itrkunj" },
+      {
+        property: "og:description",
+        content: "Rose, jasmine and saffron attars composed with delicacy.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: () => <ShopPage category="women" />,
+});

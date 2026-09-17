@@ -1,9 +1,11 @@
 # Itrkunj Storefront Completion and Razorpay Payments
 
 ## Goal
+
 Finish the Itrkunj premium attar storefront and add a secure Razorpay checkout flow for demo-ready orders that can later accept live payments.
 
 ## Remaining storefront work
+
 - Replace the `/` placeholder with the product-led home page: animated opening carousel, category gateways, bestsellers, brand story, testimonials, gallery, and newsletter.
 - Add a validated `/contact` page with inquiry form, contact details placeholders clearly marked for replacement, and WhatsApp action without inventing real business details.
 - Add a `/checkout` flow connected to the existing cart: customer details, address, order summary, payment step, validation, success confirmation, and clear empty-cart handling.
@@ -13,6 +15,7 @@ Finish the Itrkunj premium attar storefront and add a secure Razorpay checkout f
 - Validate the complete experience on desktop and mobile, including navigation, cart persistence, checkout states, keyboard access, reduced-motion behavior, and runtime errors.
 
 ## Razorpay integration
+
 - Enable Lovable Cloud because order/payment state and secure server-side payment verification require persistent storage and server functions.
 - Add a server-side Razorpay order-creation endpoint that validates the cart and checkout details, calculates totals from the catalog, and creates a Razorpay order.
 - Add Razorpay checkout to the payment step using the public key ID in the browser; keep the key secret server-only.
@@ -23,11 +26,13 @@ Finish the Itrkunj premium attar storefront and add a secure Razorpay checkout f
 - Add safe failure states for declined payments, abandoned checkout, duplicate webhook delivery, invalid signatures, and retrying payment verification.
 
 ## Credentials and setup
+
 - After approval, request the Razorpay Key ID, Key Secret, and Webhook Secret through secure project secrets; never place private values in source code.
 - Configure the webhook URL after the endpoint exists and document the Razorpay dashboard settings needed for test and live modes.
 - Do not claim that live payments are active until Razorpay account verification and live credentials are configured.
 
 ## Technical details
+
 - Keep TanStack Start file-based routing and the existing design tokens/components.
 - Use server functions for app-internal order and payment operations, and a public server route for Razorpay webhooks.
 - Validate all request bodies with Zod, recalculate totals server-side, and never trust client-provided prices or payment status.
