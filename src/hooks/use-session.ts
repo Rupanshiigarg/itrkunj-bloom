@@ -17,29 +17,43 @@ export function useSession() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchProfile = useCallback(async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .maybeSingle();
+  const fetchProfile = useCallback(
+    async (userId: string, userMeta?: Record<string, unknown>) => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", userId)
+          .maybeSingle();
 
-      if (error) {
-        console.warn("[useSession] Error fetching profile:", error.message);
+        if (error) {
+          console.warn("[useSession] Error fetching profile:", error.message);
+        }
+
+        if (data) {
+          setProfile(data as UserProfile);
+          return data as UserProfile;
+        }
+
+        // Fallback to user metadata if database profile row is pending creation
+        if (userMeta) {
+          const fallbackProfile: UserProfile = {
+            id: userId,
+            full_name: (userMeta.full_name as string) || null,
+            phone: (userMeta.phone as string) || null,
+            role: (userMeta.role as string) || "customer",
+          };
+          setProfile(fallbackProfile);
+          return fallbackProfile;
+        }
+        return null;
+      } catch (err) {
+        console.warn("[useSession] Unexpected error in fetchProfile:", err);
         return null;
       }
-
-      if (data) {
-        setProfile(data as UserProfile);
-        return data as UserProfile;
-      }
-      return null;
-    } catch (err) {
-      console.warn("[useSession] Unexpected error in fetchProfile:", err);
-      return null;
-    }
-  }, []);
+    },
+    [],
+  );
 
   const syncGuestWishlistToDb = useCallback(async (userId: string) => {
     try {
@@ -74,7 +88,7 @@ export function useSession() {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          fetchProfile(session.user.id);
+          fetchProfile(session.user.id, session.user.user_metadata);
           syncGuestWishlistToDb(session.user.id);
         }
         setIsLoading(false);
@@ -93,7 +107,7 @@ export function useSession() {
       setUser(newSession?.user ?? null);
 
       if (newSession?.user) {
-        fetchProfile(newSession.user.id);
+        fetchProfile(newSession.user.id, newSession.user.user_metadata);
         if (event === "SIGNED_IN") {
           syncGuestWishlistToDb(newSession.user.id);
         }

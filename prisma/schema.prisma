@@ -1,0 +1,324 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ---------------------------------------------------------------------------
+// Profiles (references auth.users managed by Supabase)
+// ---------------------------------------------------------------------------
+model Profile {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fullName  String?  @map("full_name")
+  phone     String?
+  role      String   @default("customer") // 'customer' | 'admin'
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  addresses   Address[]
+  orders      Order[]
+  reviews     Review[]
+  wishlist    WishlistItem[]
+  couponUses  CouponUse[]
+
+  @@map("profiles")
+}
+
+// ---------------------------------------------------------------------------
+// Addresses (Customer delivery addresses)
+// ---------------------------------------------------------------------------
+model Address {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  user      Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String
+  line1     String
+  line2     String?
+  city      String
+  state     String
+  pincode   String
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([userId], map: "idx_addresses_user_id")
+  @@map("addresses")
+}
+
+// ---------------------------------------------------------------------------
+// Categories (Thakur Sewa, Men's Attars, Women's Attars)
+// ---------------------------------------------------------------------------
+model Category {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug         String    @unique
+  name         String
+  description  String?
+  deityTags    String[]  @default([]) @map("deity_tags")
+  occasionTags String[]  @default([]) @map("occasion_tags")
+  sortOrder    Int       @default(0) @map("sort_order")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  products Product[]
+
+  @@map("categories")
+}
+
+// ---------------------------------------------------------------------------
+// Products (Vaishnav attars)
+// ---------------------------------------------------------------------------
+model Product {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug        String   @unique
+  name        String
+  categoryId  String   @map("category_id") @db.Uuid
+  category    Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  subtitle    String?
+  description String?
+  badge       String?
+  isPublished Boolean  @default(true) @map("is_published")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  variants       ProductVariant[]
+  images         ProductImage[]
+  fragranceNotes FragranceNote[]
+  reviews        Review[]
+  wishlistItems  WishlistItem[]
+
+  @@index([slug], map: "idx_products_slug")
+  @@index([categoryId], map: "idx_products_category")
+  @@map("products")
+}
+
+// ---------------------------------------------------------------------------
+// Product Variants (Sizes: 3ml, 6ml, 12ml with per-variant pricing)
+// ---------------------------------------------------------------------------
+model ProductVariant {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sizeMl    Int      @map("size_ml") // 3, 6, 12
+  price     Int      // INR Rupees
+  stock     Int      @default(100)
+  sku       String   @unique
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  orderItems OrderItem[]
+
+  @@index([productId], map: "idx_product_variants_product")
+  @@map("product_variants")
+}
+
+// ---------------------------------------------------------------------------
+// Product Images (Gallery)
+// ---------------------------------------------------------------------------
+model ProductImage {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  storageUrl String   @map("storage_url")
+  alt        String?
+  sortOrder  Int      @default(0) @map("sort_order")
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("product_images")
+}
+
+// ---------------------------------------------------------------------------
+// Fragrance Notes (Top, Heart, Base)
+// ---------------------------------------------------------------------------
+model FragranceNote {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  note      String
+  type      String   // 'top' | 'heart' | 'base'
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("fragrance_notes")
+}
+
+// ---------------------------------------------------------------------------
+// Orders
+// ---------------------------------------------------------------------------
+model Order {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  user             Profile  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  status           String   @default("pending_payment") // pending_payment | pending_cod | paid | processing | shipped | delivered | cancelled | refunded
+  addressSnapshot  Json     @map("address_snapshot")
+  subtotal         Int      // INR Rupees
+  discount         Int      @default(0)
+  shippingFee      Int      @default(0) @map("shipping_fee")
+  total            Int      // INR Rupees
+  couponId         String?  @map("coupon_id") @db.Uuid
+  coupon           Coupon?  @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  razorpayOrderId  String?  @unique @map("razorpay_order_id")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  items     OrderItem[]
+  payment   Payment?
+  shipment  Shipment?
+  couponUse CouponUse?
+
+  @@index([userId], map: "idx_orders_user_id")
+  @@index([status], map: "idx_orders_status")
+  @@map("orders")
+}
+
+// ---------------------------------------------------------------------------
+// Order Items
+// ---------------------------------------------------------------------------
+model OrderItem {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId          String         @map("order_id") @db.Uuid
+  order            Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productVariantId String         @map("product_variant_id") @db.Uuid
+  variant          ProductVariant @relation(fields: [productVariantId], references: [id], onDelete: Restrict)
+  productSnapshot  Json           @map("product_snapshot")
+  quantity         Int
+  unitPrice        Int            @map("unit_price") // INR Rupees
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz
+
+  review Review?
+
+  @@index([orderId], map: "idx_order_items_order")
+  @@map("order_items")
+}
+
+// ---------------------------------------------------------------------------
+// Payments (Razorpay & COD)
+// ---------------------------------------------------------------------------
+model Payment {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId           String    @unique @map("order_id") @db.Uuid
+  order             Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  razorpayOrderId   String    @map("razorpay_order_id")
+  razorpayPaymentId String?   @map("razorpay_payment_id")
+  razorpaySignature String?   @map("razorpay_signature")
+  method            String?   // 'upi' | 'card' | 'netbanking' | 'cod'
+  status            String    @default("created") // created | captured | failed | refunded
+  capturedAt        DateTime? @map("captured_at") @db.Timestamptz
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("payments")
+}
+
+// ---------------------------------------------------------------------------
+// Shipments (Shiprocket logistics)
+// ---------------------------------------------------------------------------
+model Shipment {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId              String    @unique @map("order_id") @db.Uuid
+  order                Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  shiprocketOrderId    String?   @map("shiprocket_order_id")
+  shiprocketShipmentId String?   @map("shiprocket_shipment_id")
+  awb                  String?
+  courier              String?
+  trackingUrl          String?   @map("tracking_url")
+  status               String    @default("created") // created | pickup_scheduled | in_transit | out_for_delivery | delivered | undelivered | rto
+  estimatedDelivery    DateTime? @map("estimated_delivery") @db.Date
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("shipments")
+}
+
+// ---------------------------------------------------------------------------
+// Coupons
+// ---------------------------------------------------------------------------
+model Coupon {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code      String    @unique
+  type      String    // 'percent' | 'flat'
+  value     Int       // Percentage (10 = 10%) or flat rupees
+  minOrder  Int       @default(0) @map("min_order")
+  maxUses   Int?      @map("max_uses")
+  usedCount Int       @default(0) @map("used_count")
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz
+  isActive  Boolean   @default(true) @map("is_active")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  orders     Order[]
+  couponUses CouponUse[]
+
+  @@map("coupons")
+}
+
+// ---------------------------------------------------------------------------
+// Coupon Uses
+// ---------------------------------------------------------------------------
+model CouponUse {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  couponId  String   @map("coupon_id") @db.Uuid
+  coupon    Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id") @db.Uuid
+  user      Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId   String   @unique @map("order_id") @db.Uuid
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("coupon_uses")
+}
+
+// ---------------------------------------------------------------------------
+// Reviews
+// ---------------------------------------------------------------------------
+model Review {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId   String    @map("product_id") @db.Uuid
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId      String    @map("user_id") @db.Uuid
+  user        Profile   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderItemId String    @unique @map("order_item_id") @db.Uuid
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  rating      Int       // 1 - 5
+  title       String?
+  body        String?
+  isApproved  Boolean   @default(false) @map("is_approved")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@index([productId], map: "idx_reviews_product")
+  @@map("reviews")
+}
+
+// ---------------------------------------------------------------------------
+// Wishlist Items (Composite PK)
+// ---------------------------------------------------------------------------
+model WishlistItem {
+  userId    String   @map("user_id") @db.Uuid
+  user      Profile  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String   @map("product_id") @db.Uuid
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@id([userId, productId])
+  @@index([userId], map: "idx_wishlist_user_id")
+  @@map("wishlist_items")
+}
+
+// ---------------------------------------------------------------------------
+// Shiprocket Tokens (Cached authentication tokens)
+// ---------------------------------------------------------------------------
+model ShiprocketToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  token     String
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@map("shiprocket_tokens")
+}

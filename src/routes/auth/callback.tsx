@@ -36,7 +36,10 @@ function AuthCallbackPage() {
           const {
             data: { subscription },
           } = supabase.auth.onAuthStateChange((event, session) => {
-            if (session) {
+            if (event === "PASSWORD_RECOVERY") {
+              subscription.unsubscribe();
+              navigate({ to: "/auth/reset-password" });
+            } else if (session) {
               subscription.unsubscribe();
               navigate({ href: redirect });
             }

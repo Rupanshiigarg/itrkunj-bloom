@@ -29,8 +29,10 @@ import { Route as AccountOrdersRouteImport } from './routes/account/orders'
 import { Route as AccountProfileRouteImport } from './routes/account/profile'
 import { Route as AccountWishlistRouteImport } from './routes/account/wishlist'
 import { Route as AuthCallbackRouteImport } from './routes/auth/callback'
+import { Route as AuthForgotPasswordRouteImport } from './routes/auth/forgot-password'
 import { Route as AuthLoginRouteImport } from './routes/auth/login'
 import { Route as AuthRegisterRouteImport } from './routes/auth/register'
+import { Route as AuthResetPasswordRouteImport } from './routes/auth/reset-password'
 import { Route as OrderConfirmationIdRouteImport } from './routes/order-confirmation.$id'
 import { Route as ProductSlugRouteImport } from './routes/product.$slug'
 import { Route as AccountOrdersIdRouteImport } from './routes/account/orders.$id'
@@ -135,6 +137,11 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthForgotPasswordRoute = AuthForgotPasswordRouteImport.update({
+  id: '/auth/forgot-password',
+  path: '/auth/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthLoginRoute = AuthLoginRouteImport.update({
   id: '/auth/login',
   path: '/auth/login',
@@ -143,6 +150,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
 const AuthRegisterRoute = AuthRegisterRouteImport.update({
   id: '/auth/register',
   path: '/auth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
+  id: '/auth/reset-password',
+  path: '/auth/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OrderConfirmationIdRoute = OrderConfirmationIdRouteImport.update({
@@ -181,8 +193,10 @@ export interface FileRoutesByFullPath {
   '/account/profile': typeof AccountProfileRoute
   '/account/wishlist': typeof AccountWishlistRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/order-confirmation/$id': typeof OrderConfirmationIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/account/': typeof AccountIndexRoute
@@ -207,8 +221,10 @@ export interface FileRoutesByTo {
   '/account/profile': typeof AccountProfileRoute
   '/account/wishlist': typeof AccountWishlistRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/order-confirmation/$id': typeof OrderConfirmationIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/account': typeof AccountIndexRoute
@@ -235,8 +251,10 @@ export interface FileRoutesById {
   '/account/profile': typeof AccountProfileRoute
   '/account/wishlist': typeof AccountWishlistRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/forgot-password': typeof AuthForgotPasswordRoute
   '/auth/login': typeof AuthLoginRoute
   '/auth/register': typeof AuthRegisterRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/order-confirmation/$id': typeof OrderConfirmationIdRoute
   '/product/$slug': typeof ProductSlugRoute
   '/account/': typeof AccountIndexRoute
@@ -264,8 +282,10 @@ export interface FileRouteTypes {
     | '/account/profile'
     | '/account/wishlist'
     | '/auth/callback'
+    | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
+    | '/auth/reset-password'
     | '/order-confirmation/$id'
     | '/product/$slug'
     | '/account/'
@@ -290,8 +310,10 @@ export interface FileRouteTypes {
     | '/account/profile'
     | '/account/wishlist'
     | '/auth/callback'
+    | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
+    | '/auth/reset-password'
     | '/order-confirmation/$id'
     | '/product/$slug'
     | '/account'
@@ -317,8 +339,10 @@ export interface FileRouteTypes {
     | '/account/profile'
     | '/account/wishlist'
     | '/auth/callback'
+    | '/auth/forgot-password'
     | '/auth/login'
     | '/auth/register'
+    | '/auth/reset-password'
     | '/order-confirmation/$id'
     | '/product/$slug'
     | '/account/'
@@ -341,8 +365,10 @@ export interface RootRouteChildren {
   ThakurSewaRoute: typeof ThakurSewaRoute
   WomenRoute: typeof WomenRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  AuthForgotPasswordRoute: typeof AuthForgotPasswordRoute
   AuthLoginRoute: typeof AuthLoginRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
+  AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   OrderConfirmationIdRoute: typeof OrderConfirmationIdRoute
   ProductSlugRoute: typeof ProductSlugRoute
 }
@@ -489,6 +515,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/forgot-password': {
+      id: '/auth/forgot-password'
+      path: '/auth/forgot-password'
+      fullPath: '/auth/forgot-password'
+      preLoaderRoute: typeof AuthForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/login': {
       id: '/auth/login'
       path: '/auth/login'
@@ -501,6 +534,13 @@ declare module '@tanstack/react-router' {
       path: '/auth/register'
       fullPath: '/auth/register'
       preLoaderRoute: typeof AuthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/reset-password': {
+      id: '/auth/reset-password'
+      path: '/auth/reset-password'
+      fullPath: '/auth/reset-password'
+      preLoaderRoute: typeof AuthResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/order-confirmation/$id': {
@@ -574,8 +614,10 @@ const rootRouteChildren: RootRouteChildren = {
   ThakurSewaRoute: ThakurSewaRoute,
   WomenRoute: WomenRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  AuthForgotPasswordRoute: AuthForgotPasswordRoute,
   AuthLoginRoute: AuthLoginRoute,
   AuthRegisterRoute: AuthRegisterRoute,
+  AuthResetPasswordRoute: AuthResetPasswordRoute,
   OrderConfirmationIdRoute: OrderConfirmationIdRoute,
   ProductSlugRoute: ProductSlugRoute,
 }

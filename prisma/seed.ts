@@ -1,29 +1,17 @@
 /**
- * drizzle/seed.ts
+ * prisma/seed.ts
  *
- * Seeds all 9 products from the static catalog into the database.
- * Run with: bun drizzle/seed.ts
- *
- * Requires DATABASE_URL to be set in .env
+ * Seeds all 9 Vaishnav attars, variants, notes, and categories into PostgreSQL via Prisma.
+ * Run with: npm run db:seed
  */
-import "dotenv/config";
-import { drizzle } from "drizzle-orm/postgres-js";
-import { eq } from "drizzle-orm";
-import postgres from "postgres";
-import * as schema from "./schema";
+import { PrismaClient } from "@prisma/client";
 
-const { categories, products, productVariants, productImages, fragranceNotes } = schema;
+const prisma = new PrismaClient();
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Round price to nearest 10 */
 function round10(n: number): number {
   return Math.round(n / 10) * 10;
 }
 
-/** Derive per-size price from base (6ml) price */
 function variantPrice(basePrice: number, sizeMl: number): number {
   if (sizeMl === 3) return round10(basePrice * 0.5);
   if (sizeMl === 6) return basePrice;
@@ -31,34 +19,30 @@ function variantPrice(basePrice: number, sizeMl: number): number {
   throw new Error(`Unknown size: ${sizeMl}`);
 }
 
-// ---------------------------------------------------------------------------
-// Data
-// ---------------------------------------------------------------------------
-
 const CATEGORY_DATA = [
   {
     slug: "thakur-sewa",
     name: "Thakur Sewa",
     description: "Sacred attars crafted for divine worship and daily sewa rituals.",
-    deity_tags: ["Krishna", "Radha Krishna", "Hanuman", "Vishnu"],
-    occasion_tags: ["Daily Sewa", "Shringar", "Festivals", "Puja"],
-    sort_order: 0,
+    deityTags: ["Krishna", "Radha Krishna", "Hanuman", "Vishnu"],
+    occasionTags: ["Daily Sewa", "Shringar", "Festivals", "Puja"],
+    sortOrder: 0,
   },
   {
     slug: "men",
     name: "Men's Attars",
     description: "Bold, earthy, and regal attars for the modern man.",
-    deity_tags: [] as string[],
-    occasion_tags: [] as string[],
-    sort_order: 1,
+    deityTags: [] as string[],
+    occasionTags: [] as string[],
+    sortOrder: 1,
   },
   {
     slug: "women",
     name: "Women's Attars",
     description: "Floral, delicate, and timeless attars for women.",
-    deity_tags: [] as string[],
-    occasion_tags: [] as string[],
-    sort_order: 2,
+    deityTags: [] as string[],
+    occasionTags: [] as string[],
+    sortOrder: 2,
   },
 ];
 
@@ -210,115 +194,140 @@ const PRODUCT_DATA: ProductSeedData[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// Seed
-// ---------------------------------------------------------------------------
+async function main() {
+  console.log("🌱 Starting Prisma database seed...");
 
-async function seed() {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error("DATABASE_URL environment variable is required");
+  // 1. Categories
+  console.log("  Seeding categories...");
+  const categoryMap = new Map<string, string>();
+
+  for (const cat of CATEGORY_DATA) {
+    const record = await prisma.category.upsert({
+      where: { slug: cat.slug },
+      update: {
+        name: cat.name,
+        description: cat.description,
+        deityTags: cat.deityTags,
+        occasionTags: cat.occasionTags,
+        sortOrder: cat.sortOrder,
+      },
+      create: {
+        slug: cat.slug,
+        name: cat.name,
+        description: cat.description,
+        deityTags: cat.deityTags,
+        occasionTags: cat.occasionTags,
+        sortOrder: cat.sortOrder,
+      },
+    });
+    categoryMap.set(cat.slug, record.id);
   }
 
-  const client = postgres(url, { max: 1 });
-  const db = drizzle(client, { schema });
-
-  console.log("🌱 Starting seed...");
-
-  // ── 1. Insert categories ──────────────────────────────────────────────────
-  console.log("  Inserting categories...");
-  const insertedCategories = await db
-    .insert(categories)
-    .values(CATEGORY_DATA)
-    .onConflictDoNothing({ target: categories.slug })
-    .returning({ id: categories.id, slug: categories.slug });
-
-  // Re-fetch all categories to build slug→id map (handles already-existing rows)
-  const allCategories = await db
-    .select({ id: categories.id, slug: categories.slug })
-    .from(categories);
-  const categoryMap = new Map(allCategories.map((c) => [c.slug, c.id]));
-  console.log(
-    `  ✓ ${insertedCategories.length} categories inserted (${allCategories.length} total)`,
-  );
-
-  // ── 2. Insert products, variants, images, fragrance notes ─────────────────
-  for (const p of PRODUCT_DATA) {
-    const categoryId = categoryMap.get(p.categorySlug);
-    if (!categoryId) throw new Error(`Category not found: ${p.categorySlug}`);
-
-    console.log(`  Inserting product: ${p.name}...`);
-
-    // Product
-    const [product] = await db
-      .insert(products)
-      .values({
-        slug: p.slug,
-        name: p.name,
-        category_id: categoryId,
-        subtitle: p.subtitle,
-        badge: p.badge ?? null,
-        is_published: true,
-        sort_order: p.sortOrder,
-      })
-      .onConflictDoNothing({ target: products.slug })
-      .returning({ id: products.id });
-
-    // If already exists, fetch the existing product id
-    let productId: string;
-    if (product) {
-      productId = product.id;
-    } else {
-      const [existing] = await db
-        .select({ id: products.id })
-        .from(products)
-        .where(eq(products.slug, p.slug))
-        .limit(1);
-      if (!existing) throw new Error(`Product not found after insert: ${p.slug}`);
-      productId = existing.id;
+  // 2. Products
+  console.log("  Seeding products and variants...");
+  for (const prod of PRODUCT_DATA) {
+    const categoryId = categoryMap.get(prod.categorySlug);
+    if (!categoryId) {
+      throw new Error(`Category not found: ${prod.categorySlug}`);
     }
 
+    const productRecord = await prisma.product.upsert({
+      where: { slug: prod.slug },
+      update: {
+        name: prod.name,
+        categoryId,
+        subtitle: prod.subtitle,
+        badge: prod.badge ?? null,
+        sortOrder: prod.sortOrder,
+      },
+      create: {
+        slug: prod.slug,
+        name: prod.name,
+        categoryId,
+        subtitle: prod.subtitle,
+        badge: prod.badge ?? null,
+        sortOrder: prod.sortOrder,
+      },
+    });
+
     // Variants
-    const variantRows = p.sizes.map((sizeMl) => ({
-      product_id: productId,
-      size_ml: sizeMl,
-      price: variantPrice(p.basePrice, sizeMl),
-      stock: 100,
-      sku: `${p.slug}-${sizeMl}ml`,
-    }));
-    await db
-      .insert(productVariants)
-      .values(variantRows)
-      .onConflictDoNothing({ target: productVariants.sku });
+    for (const size of prod.sizes) {
+      const sku = `${prod.slug}-${size}ml`.toLowerCase();
+      const price = variantPrice(prod.basePrice, size);
+      await prisma.productVariant.upsert({
+        where: { sku },
+        update: {
+          price,
+          sizeMl: size,
+          stock: 100,
+        },
+        create: {
+          productId: productRecord.id,
+          sizeMl: size,
+          price,
+          stock: 100,
+          sku,
+        },
+      });
+    }
 
     // Images
-    const imageRows = p.images.map((img, idx) => ({
-      product_id: productId,
-      storage_url: img.url,
-      alt: img.alt,
-      sort_order: idx,
-      is_primary: img.isPrimary,
-    }));
-    await db.insert(productImages).values(imageRows).onConflictDoNothing();
+    for (let i = 0; i < prod.images.length; i++) {
+      const img = prod.images[i];
+      const existing = await prisma.productImage.findFirst({
+        where: {
+          productId: productRecord.id,
+          storageUrl: img.url,
+        },
+      });
+      if (!existing) {
+        await prisma.productImage.create({
+          data: {
+            productId: productRecord.id,
+            storageUrl: img.url,
+            alt: img.alt,
+            sortOrder: i,
+            isPrimary: img.isPrimary,
+          },
+        });
+      }
+    }
 
-    // Fragrance notes
-    const noteRows: Array<{ product_id: string; note: string; type: string }> = [
-      ...p.notes.top.map((note) => ({ product_id: productId, note, type: "top" })),
-      ...p.notes.heart.map((note) => ({ product_id: productId, note, type: "heart" })),
-      ...p.notes.base.map((note) => ({ product_id: productId, note, type: "base" })),
+    // Fragrance Notes
+    const allNotes: Array<{ note: string; type: string }> = [
+      ...prod.notes.top.map((n) => ({ note: n, type: "top" })),
+      ...prod.notes.heart.map((n) => ({ note: n, type: "heart" })),
+      ...prod.notes.base.map((n) => ({ note: n, type: "base" })),
     ];
-    await db.insert(fragranceNotes).values(noteRows).onConflictDoNothing();
 
-    console.log(
-      `  ✓ ${p.name} seeded (${p.sizes.length} variants, ${imageRows.length} images, ${noteRows.length} notes)`,
-    );
+    for (const noteItem of allNotes) {
+      const existing = await prisma.fragranceNote.findFirst({
+        where: {
+          productId: productRecord.id,
+          note: noteItem.note,
+          type: noteItem.type,
+        },
+      });
+      if (!existing) {
+        await prisma.fragranceNote.create({
+          data: {
+            productId: productRecord.id,
+            note: noteItem.note,
+            type: noteItem.type,
+          },
+        });
+      }
+    }
   }
 
-  console.log("\n✅ Seed complete!");
-  await client.end();
+  console.log("✨ Seed completed successfully! All 9 products, variants, and notes seeded.");
 }
 
-seed().catch((err) => {
-  console.error("❌ Seed failed:", err);
-  process.exit(1);
-});
+main()
+  .catch((e) => {
+    console.error("❌ Seed failed:", e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

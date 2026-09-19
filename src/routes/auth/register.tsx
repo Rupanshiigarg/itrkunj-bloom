@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sparkles, ArrowRight, ShieldCheck, Heart } from "lucide-react";
+import { Sparkles, ArrowRight, ShieldCheck, Heart, Eye, EyeOff, Check } from "lucide-react";
 
 export const Route = createFileRoute("/auth/register")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -31,6 +31,9 @@ function RegisterPage() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   // Check if already authenticated
@@ -64,6 +67,11 @@ function RegisterPage() {
 
     if (password.length < 6) {
       toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match. Please verify.");
       return;
     }
 
@@ -188,16 +196,66 @@ function RegisterPage() {
               >
                 Password
               </Label>
-              <Input
-                id="reg-password"
-                type="password"
-                placeholder="At least 6 characters"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="mt-1.5"
-                minLength={6}
-                required
-              />
+              <div className="relative mt-1.5">
+                <Input
+                  id="reg-password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="At least 6 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pr-10"
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <Label
+                htmlFor="reg-confirm-password"
+                className="text-xs font-semibold uppercase tracking-wider"
+              >
+                Confirm Password
+              </Label>
+              <div className="relative mt-1.5">
+                <Input
+                  id="reg-confirm-password"
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="Re-enter password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="pr-10"
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                >
+                  {showConfirmPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+              {confirmPassword.length > 0 && (
+                <div className="mt-1.5 flex items-center gap-1.5 text-[11px]">
+                  {password === confirmPassword ? (
+                    <span className="text-emerald-600 flex items-center gap-1">
+                      <Check className="size-3" /> Passwords match
+                    </span>
+                  ) : (
+                    <span className="text-amber-600">Passwords do not match yet</span>
+                  )}
+                </div>
+              )}
             </div>
 
             <Button type="submit" className="w-full" disabled={isLoading}>
