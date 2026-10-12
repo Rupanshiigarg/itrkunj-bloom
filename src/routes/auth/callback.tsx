@@ -23,35 +23,103 @@ function AuthCallbackPage() {
 
     async function handleAuthCallback() {
       try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) {
-          if (isMounted) setErrorMsg(error.message);
+        const url = new URL(window.location.href);
+        const code = url.searchParams.get("code");
+        const tokenHash = url.searchParams.get("token_hash");
+        const type = url.searchParams.get("type");
+        const errorDescription = url.searchParams.get("error_description");
+        const error = url.searchParams.get("error");
+
+        if (errorDescription || error) {
+          const msg = errorDescription
+            ? decodeURIComponent(errorDescription.replace(/\+/g, " "))
+            : "Authentication link has expired or is invalid.";
+          if (isMounted) setErrorMsg(msg);
+          return;
+        }
+
+        // 1. PKCE flow: Exchange authorization code for session
+        if (code) {
+          const { data: exchangeData, error: exchangeErr } =
+            await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeErr) {
+            if (isMounted) setErrorMsg(exchangeErr.message);
+            return;
+          }
+          if (exchangeData.session && isMounted) {
+            if (redirect === "/auth/reset-password" || type === "recovery") {
+              navigate({ to: "/auth/reset-password" });
+            } else {
+              navigate({ href: redirect });
+            }
+            return;
+          }
+        }
+
+        // 2. Token hash OTP flow (email confirmation / recovery)
+        if (tokenHash && type) {
+          const { error: otpErr } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: type as any,
+          });
+          if (otpErr) {
+            if (isMounted) setErrorMsg(otpErr.message);
+            return;
+          }
+          if (isMounted) {
+            if (type === "recovery" || redirect === "/auth/reset-password") {
+              navigate({ to: "/auth/reset-password" });
+            } else {
+              navigate({ href: redirect });
+            }
+            return;
+          }
+        }
+
+        // 3. Existing session check
+        const { data, error: sessionErr } = await supabase.auth.getSession();
+        if (sessionErr) {
+          if (isMounted) setErrorMsg(sessionErr.message);
           return;
         }
 
         if (data.session) {
-          navigate({ href: redirect });
-        } else {
-          // Listen for next auth event (e.g. hash token exchange)
-          const {
-            data: { subscription },
-          } = supabase.auth.onAuthStateChange((event, session) => {
-            if (event === "PASSWORD_RECOVERY") {
-              subscription.unsubscribe();
-              navigate({ to: "/auth/reset-password" });
-            } else if (session) {
-              subscription.unsubscribe();
-              navigate({ href: redirect });
-            }
-          });
-
-          // Fallback timeout
-          setTimeout(() => {
-            if (isMounted) {
-              navigate({ href: `/auth/login?redirect=${encodeURIComponent(redirect)}` });
-            }
-          }, 3000);
+          if (
+            redirect === "/auth/reset-password" ||
+            window.location.hash.includes("type=recovery")
+          ) {
+            navigate({ to: "/auth/reset-password" });
+          } else {
+            navigate({ href: redirect });
+          }
+          return;
         }
+
+        // 4. Listen for auth state change from implicit hash fragment
+        const {
+          data: { subscription },
+        } = supabase.auth.onAuthStateChange((event, session) => {
+          if (event === "PASSWORD_RECOVERY" || window.location.hash.includes("type=recovery")) {
+            subscription.unsubscribe();
+            navigate({ to: "/auth/reset-password" });
+          } else if (session) {
+            subscription.unsubscribe();
+            navigate({ href: redirect });
+          }
+        });
+
+        // 5. Fallback timeout
+        const timeout = setTimeout(() => {
+          if (isMounted) {
+            subscription.unsubscribe();
+            navigate({ href: `/auth/login?redirect=${encodeURIComponent(redirect)}` });
+          }
+        }, 4000);
+
+        return () => {
+          clearTimeout(timeout);
+          subscription.unsubscribe();
+        };
       } catch (err) {
         const message = err instanceof Error ? err.message : "Authentication failed";
         if (isMounted) setErrorMsg(message);

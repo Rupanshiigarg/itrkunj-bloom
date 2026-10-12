@@ -30,25 +30,57 @@ function ResetPasswordPage() {
   const [hasValidSession, setHasValidSession] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Check if recovery session or access token is active
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setHasValidSession(true);
-      } else {
-        // Wait briefly for hash-token authentication if redirect was immediate
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
-          if (event === "PASSWORD_RECOVERY" || s) {
+    let isMounted = true;
+
+    async function checkRecoverySession() {
+      // 1. If code exists in query params (e.g. direct landing from email), exchange it
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get("code");
+      if (code) {
+        try {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error && data.session && isMounted) {
             setHasValidSession(true);
+            return;
           }
-        });
-
-        setTimeout(() => {
-          setHasValidSession((prev) => (prev === true ? true : false));
-        }, 1500);
-
-        return () => subscription.unsubscribe();
+        } catch {
+          // ignore and fall through
+        }
       }
-    });
+
+      // 2. Check if recovery session or access token is active
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session && isMounted) {
+        setHasValidSession(true);
+        return;
+      }
+
+      // 3. Listen for PASSWORD_RECOVERY or session event
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event, s) => {
+        if (event === "PASSWORD_RECOVERY" || s) {
+          if (isMounted) setHasValidSession(true);
+        }
+      });
+
+      const timer = setTimeout(() => {
+        if (isMounted) setHasValidSession((prev) => (prev === true ? true : false));
+      }, 2500);
+
+      return () => {
+        clearTimeout(timer);
+        subscription.unsubscribe();
+      };
+    }
+
+    checkRecoverySession();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
