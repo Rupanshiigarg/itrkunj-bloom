@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "@/hooks/use-session";
 import { useStore } from "@/lib/store";
 import { products, formatPrice } from "@/lib/catalog";
+import { createOrderServerFn } from "@/lib/orders.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -161,70 +162,67 @@ function CheckoutPage() {
   const handlePlaceOrder = async () => {
     setIsProcessing(true);
 
-    const orderId = "ITR-" + Math.random().toString(36).substring(2, 9).toUpperCase();
-    const orderItems = cart.map((item) => {
-      const p = products.find((x) => x.id === item.id);
-      return {
-        name: p?.name || "Attar",
-        size: item.size,
-        quantity: item.quantity,
-        price: p ? p.price * (item.size / 6) : 990,
-        image: p?.image || "",
-      };
-    });
-
     const deliveryAddress = {
       name: name.trim(),
       phone: `+91${phone.replace(/\D/g, "").slice(-10)}`,
       line1: line1.trim(),
-      line2: line2.trim(),
+      line2: line2.trim() || undefined,
       city: city.trim(),
       state: stateName.trim(),
       pincode: pincode.trim(),
     };
 
-    const orderRecord = {
-      id: orderId,
-      created_at: new Date().toISOString(),
-      status: paymentMethod === "cod" ? "pending_cod" : "paid",
-      subtotal,
-      discount,
-      shipping_fee: shippingFee,
-      total,
-      method: paymentMethod,
-      items: orderItems,
-      address: deliveryAddress,
-    };
+    try {
+      const result = await createOrderServerFn({
+        data: {
+          userId: user?.id,
+          cart: cart.map((c) => ({ id: c.id, size: c.size, quantity: c.quantity })),
+          address: deliveryAddress,
+          paymentMethod,
+          couponCode: couponApplied ? couponCode : undefined,
+        },
+      });
 
-    // Store in localStorage for instant tracking
-    localStorage.setItem(`itrkunj-order-${orderId}`, JSON.stringify(orderRecord));
+      const orderItems = cart.map((item) => {
+        const p = products.find((x) => x.id === item.id);
+        return {
+          name: p?.name || "Attar",
+          size: item.size,
+          quantity: item.quantity,
+          price: p ? p.price * (item.size / 6) : 990,
+          image: p?.image || "",
+        };
+      });
 
-    // Try saving to DB if table is active
-    if (user) {
-      try {
-        await supabase.from("orders").insert({
-          id: crypto.randomUUID ? crypto.randomUUID() : undefined,
-          user_id: user.id,
-          status: paymentMethod === "cod" ? "pending_cod" : "paid",
-          address_snapshot: deliveryAddress,
-          subtotal,
-          discount,
-          shipping_fee: shippingFee,
-          total,
-          razorpay_order_id: orderId,
-        });
-      } catch {
-        // graceful offline/mock fallback
-      }
-    }
+      const orderRecord = {
+        id: result.orderId,
+        readableId: result.readableId,
+        created_at: new Date().toISOString(),
+        status: result.status,
+        subtotal,
+        discount,
+        shipping_fee: shippingFee,
+        total,
+        method: paymentMethod,
+        items: orderItems,
+        address: deliveryAddress,
+      };
 
-    // Clear cart
-    localStorage.removeItem("itrkunj-cart");
-    setTimeout(() => {
-      setIsProcessing(false);
+      // Store in localStorage for instant tracking
+      localStorage.setItem(`itrkunj-order-${result.orderId}`, JSON.stringify(orderRecord));
+      localStorage.setItem(`itrkunj-order-${result.readableId}`, JSON.stringify(orderRecord));
+
+      // Clear cart
+      localStorage.removeItem("itrkunj-cart");
+
       toast.success("Order consecrated & confirmed!");
-      navigate({ to: "/order-confirmation/$id", params: { id: orderId } });
-    }, 1000);
+      navigate({ to: "/order-confirmation/$id", params: { id: result.orderId } });
+    } catch (err) {
+      console.error("[Checkout] Order creation failed:", err);
+      toast.error(err instanceof Error ? err.message : "Failed to place order. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   if (cart.length === 0) {

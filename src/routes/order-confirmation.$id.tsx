@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useSession } from "@/hooks/use-session";
 import { formatPrice } from "@/lib/catalog";
+import { getOrderByIdServerFn } from "@/lib/orders.functions";
 import { Button } from "@/components/ui/button";
 import {
   CheckCircle2,
@@ -59,12 +60,91 @@ function OrderConfirmationPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    // 1. Check in session storage / local order registry
-    try {
-      const stored = localStorage.getItem(`itrkunj-order-${id}`);
-      if (stored) {
-        setOrder(JSON.parse(stored));
-      } else {
+    let isMounted = true;
+
+    async function loadOrder() {
+      // 1. Try fetching from server first
+      try {
+        const res = await getOrderByIdServerFn({ data: { id } });
+        if (res && isMounted) {
+          setOrder({
+            id: res.id,
+            created_at: res.created_at,
+            status: res.status,
+            subtotal: res.subtotal,
+            discount: res.discount,
+            shipping_fee: res.shipping_fee,
+            total: res.total,
+            method: (res.payment as any)?.method || "online",
+            items: (res.order_items || []).map((item: any) => ({
+              name: item.product_snapshot?.name || "Attar",
+              size: item.product_snapshot?.size_ml || 6,
+              quantity: item.quantity,
+              price: item.unit_price,
+              image: item.product_snapshot?.image_url || "",
+            })),
+            address: (res.address_snapshot as any) || {
+              name: user?.user_metadata?.full_name || "Valued Patron",
+              phone: user?.phone || "",
+              line1: "Delivery address recorded",
+              city: "",
+              state: "",
+              pincode: "",
+            },
+          });
+          return;
+        }
+      } catch (err) {
+        console.warn("Failed to fetch order from server:", err);
+      }
+
+      // 2. Check in session storage / local order registry
+      try {
+        const stored = localStorage.getItem(`itrkunj-order-${id}`);
+        if (stored && isMounted) {
+          setOrder(JSON.parse(stored));
+          return;
+        }
+
+        // Also check in general itrkunj_order_history
+        const historyRaw = localStorage.getItem("itrkunj_order_history");
+        if (historyRaw && isMounted) {
+          const history = JSON.parse(historyRaw);
+          const found = history.find((o: any) => o.id === id || o.readableId === id);
+          if (found && isMounted) {
+            setOrder({
+              id: found.id,
+              created_at: found.created_at,
+              status: found.status,
+              subtotal: found.subtotal,
+              discount: found.discount || 0,
+              shipping_fee: found.shipping_fee || 0,
+              total: found.total,
+              method: found.payment?.method || found.method || "online",
+              items: (found.order_items || found.items || []).map((item: any) => ({
+                name: item.product_snapshot?.name || item.name || "Attar",
+                size: item.product_snapshot?.size_ml || item.size || 6,
+                quantity: item.quantity,
+                price: item.unit_price || item.price,
+                image: item.product_snapshot?.image_url || item.image || "",
+              })),
+              address: found.address || found.address_snapshot || {
+                name: user?.user_metadata?.full_name || "Valued Patron",
+                phone: user?.phone || "+91 98765 43210",
+                line1: "Delivery Address recorded",
+                city: "Kannauj",
+                state: "Uttar Pradesh",
+                pincode: "209727",
+              },
+            });
+            return;
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+
+      if (isMounted) {
         // Fallback placeholder structure
         setOrder({
           id,
@@ -86,9 +166,13 @@ function OrderConfirmationPage() {
           },
         });
       }
-    } catch {
-      // ignore parse errors
     }
+
+    loadOrder();
+
+    return () => {
+      isMounted = false;
+    };
   }, [id, user]);
 
   const copyOrderId = () => {

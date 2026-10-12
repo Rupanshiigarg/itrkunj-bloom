@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
+import { getUserOrdersServerFn } from "@/lib/orders.functions";
 import { formatPrice } from "@/lib/catalog";
 import { Button } from "@/components/ui/button";
 import { Package, ArrowRight, Clock, ShieldCheck, Loader2 } from "lucide-react";
@@ -46,6 +47,18 @@ function OrdersListPage() {
 
     async function fetchOrders() {
       try {
+        // 1. Primary: Direct query via server function (Prisma PostgreSQL)
+        try {
+          const serverOrders = await getUserOrdersServerFn({ data: { userId: user.id } });
+          if (serverOrders && serverOrders.length > 0) {
+            if (isMounted) setOrders(serverOrders as unknown as OrderRecord[]);
+            return;
+          }
+        } catch (serverErr) {
+          console.warn("[Orders] Server function error, trying client query:", serverErr);
+        }
+
+        // 2. Secondary: Client query via Supabase SDK
         const { data, error } = await supabase
           .from("orders")
           .select(
@@ -54,8 +67,48 @@ function OrdersListPage() {
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
 
-        if (!error && data && isMounted) {
+        if (!error && data && data.length > 0 && isMounted) {
           setOrders(data as unknown as OrderRecord[]);
+          return;
+        }
+
+        // 3. Fallback: Browser local orders for recent session resilience
+        const localOrders: OrderRecord[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith("itrkunj-order-")) {
+            try {
+              const parsed = JSON.parse(localStorage.getItem(key) || "{}");
+              if (parsed && parsed.id && !localOrders.some((x) => x.id === parsed.id)) {
+                localOrders.push({
+                  id: parsed.id,
+                  created_at: parsed.created_at || new Date().toISOString(),
+                  status: parsed.status || "paid",
+                  subtotal: parsed.subtotal || 0,
+                  discount: parsed.discount || 0,
+                  shipping_fee: parsed.shipping_fee || 0,
+                  total: parsed.total || 0,
+                  order_items: (parsed.items || []).map(
+                    (it: { quantity: number; price: number; name: string; size: number; image: string }, idx: number) => ({
+                      id: `local-item-${idx}`,
+                      quantity: it.quantity,
+                      unit_price: it.price,
+                      product_snapshot: {
+                        name: it.name,
+                        size_ml: it.size,
+                        image_url: it.image,
+                      },
+                    }),
+                  ),
+                });
+              }
+            } catch {
+              // Ignore corrupt local storage entries
+            }
+          }
+        }
+        if (localOrders.length > 0 && isMounted) {
+          setOrders(localOrders);
         }
       } catch (err) {
         console.warn("[Orders] Error fetching orders:", err);

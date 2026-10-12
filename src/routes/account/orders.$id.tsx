@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useSession } from "@/hooks/use-session";
 import { supabase } from "@/integrations/supabase/client";
+import { getOrderByIdServerFn } from "@/lib/orders.functions";
 import { formatPrice } from "@/lib/catalog";
 import { Button } from "@/components/ui/button";
 import {
@@ -85,6 +86,18 @@ function OrderDetailPage() {
 
     async function fetchOrderDetail() {
       try {
+        // 1. Primary: Direct query via server function
+        try {
+          const serverOrder = await getOrderByIdServerFn({ data: { id } });
+          if (serverOrder && isMounted) {
+            setOrder(serverOrder as unknown as FullOrder);
+            return;
+          }
+        } catch (serverErr) {
+          console.warn("[OrderDetail] Server function error, falling back:", serverErr);
+        }
+
+        // 2. Secondary: Client query via Supabase SDK
         const { data, error } = await supabase
           .from("orders")
           .select(
@@ -106,6 +119,45 @@ function OrderDetailPage() {
             ...data,
             shipment: rawShipment || null,
             payment: rawPayment || null,
+          } as unknown as FullOrder);
+          return;
+        }
+
+        // 3. Fallback: Browser local orders
+        const localData = localStorage.getItem(`itrkunj-order-${id}`);
+        if (localData && isMounted) {
+          const parsed = JSON.parse(localData);
+          setOrder({
+            id: parsed.id,
+            created_at: parsed.created_at,
+            status: parsed.status,
+            subtotal: parsed.subtotal,
+            discount: parsed.discount,
+            shipping_fee: parsed.shipping_fee,
+            total: parsed.total,
+            address_snapshot: parsed.address,
+            order_items: (parsed.items || []).map(
+              (it: { quantity: number; price: number; name: string; size: number; image: string }, idx: number) => ({
+                id: `local-item-${idx}`,
+                quantity: it.quantity,
+                unit_price: it.price,
+                product_snapshot: {
+                  name: it.name,
+                  size_ml: it.size,
+                  image_url: it.image,
+                },
+              }),
+            ),
+            shipment: {
+              id: "local-shipment",
+              courier: "Delhivery Surface",
+              status: "created",
+              tracking_url: "https://shiprocket.co/tracking",
+            },
+            payment: {
+              method: parsed.method,
+              status: parsed.status === "paid" ? "captured" : "pending_cod",
+            },
           } as unknown as FullOrder);
         }
       } catch (err) {

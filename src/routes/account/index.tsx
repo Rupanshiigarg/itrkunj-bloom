@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "@/hooks/use-session";
 import { useStore } from "@/lib/store";
 import { supabase } from "@/integrations/supabase/client";
+import { getUserOrdersServerFn } from "@/lib/orders.functions";
 import { formatPrice } from "@/lib/catalog";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,19 +57,62 @@ function AccountDashboardPage() {
 
     async function loadDashboardData() {
       try {
-        // 1. Fetch Orders
-        const { data: orders, error: ordersErr } = await supabase
-          .from("orders")
-          .select("id, created_at, status, total, subtotal")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false });
-
-        if (!ordersErr && orders && isMounted) {
-          setOrderCount(orders.length);
-          if (orders.length > 0) {
-            setRecentOrder(orders[0] as RecentOrder);
+        // 1. Fetch Orders via server function
+        let ordersList: RecentOrder[] = [];
+        try {
+          const serverOrders = await getUserOrdersServerFn({ data: { userId: user.id } });
+          if (serverOrders && serverOrders.length > 0) {
+            ordersList = serverOrders.map((o) => ({
+              id: o.id,
+              created_at: o.created_at,
+              status: o.status,
+              total: o.total,
+              subtotal: o.subtotal,
+            }));
           }
-          const active = orders.filter((o) =>
+        } catch {
+          // fallback to client SDK
+        }
+
+        if (ordersList.length === 0) {
+          const { data: orders, error: ordersErr } = await supabase
+            .from("orders")
+            .select("id, created_at, status, total, subtotal")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false });
+
+          if (!ordersErr && orders && orders.length > 0) {
+            ordersList = orders as RecentOrder[];
+          }
+        }
+
+        if (ordersList.length === 0) {
+          // Fallback: check localStorage
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith("itrkunj-order-")) {
+              try {
+                const parsed = JSON.parse(localStorage.getItem(key) || "{}");
+                if (parsed && parsed.id && !ordersList.some((x) => x.id === parsed.id)) {
+                  ordersList.push({
+                    id: parsed.id,
+                    created_at: parsed.created_at || new Date().toISOString(),
+                    status: parsed.status || "paid",
+                    total: parsed.total || 0,
+                    subtotal: parsed.subtotal || 0,
+                  });
+                }
+              } catch {}
+            }
+          }
+        }
+
+        if (isMounted) {
+          setOrderCount(ordersList.length);
+          if (ordersList.length > 0) {
+            setRecentOrder(ordersList[0]);
+          }
+          const active = ordersList.filter((o) =>
             ["paid", "processing", "shipped"].includes(o.status),
           ).length;
           setActiveShipmentsCount(active);
